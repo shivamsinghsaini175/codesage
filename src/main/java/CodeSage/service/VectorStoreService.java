@@ -1,5 +1,6 @@
 package CodeSage.service;
 
+import CodeSage.service.AiService;
 import CodeSage.entity.CodeChunkEntity;
 import CodeSage.model.CodeChunk;
 import CodeSage.repository.CodeChunkRepository;
@@ -14,6 +15,9 @@ import java.util.*;
 
 @Service
 public class VectorStoreService {
+
+    @Autowired
+    private AiService aiService;
 
     @Autowired
     private CodeChunkRepository repo;
@@ -69,6 +73,67 @@ public class VectorStoreService {
                 .toList();
     }
 
+    public List<Map<String, Object>> searchSmart(String query, int maxLimit) {
+
+        List<Double> vec = embeddingService.embed(query);
+
+        String vector = vec.stream()
+                .map(String::valueOf)
+                .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+
+        List<Object[]> rows = repo.searchRaw(vector, maxLimit);
+
+        List<Map<String, Object>> results = new ArrayList<>();
+
+        double threshold = 18; // tune this
+        int maxChunks = 10;
+        int tokenLimit = 8000; // approx
+
+        int currentTokens = 0;
+
+        for (Object[] row : rows) {
+
+            String content = row[0] != null ? row[0].toString() : "";
+            String path = row[1] != null ? row[1].toString() : "";
+            double score = ((Number) row[2]).doubleValue();
+
+            System.out.println("DEBUG SCORE: " + score + " PATH: " + path);
+
+            int tokens = content.length() / 4;
+
+            if (currentTokens + tokens > tokenLimit) break;
+
+            Map<String, Object> chunk = new HashMap<>();
+            chunk.put("content", content);
+            chunk.put("path", path);
+            chunk.put("score", score);
+
+            results.add(chunk);
+            currentTokens += tokens;
+
+            if (results.size() >= maxChunks) break;
+        }
+        return results;
+    }
+
+    public String rerankContext(String question, String context) {
+
+        String prompt = """
+You are given code snippets.
+
+ONLY return relevant code parts.
+DO NOT explain anything.
+DO NOT answer the question.
+
+Question:
+%s
+
+Code:
+%s
+""".formatted(question, context);
+
+        return aiService.generate(prompt);
+    }
 
     public List<EmbeddedChunk> search(String query, int limit) {
         log.info("Searching for query: '{}' with limit: {}", query, limit);

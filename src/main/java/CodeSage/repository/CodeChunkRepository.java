@@ -9,7 +9,7 @@ import java.util.List;
 public interface CodeChunkRepository extends JpaRepository<CodeChunkEntity, Long> {
 
     @Query(value = """
-    SELECT content, file_path
+    SELECT content, file_path, (embedding <-> CAST(:embedding AS vector)) AS score
     FROM code_chunks
     ORDER BY embedding <-> CAST(:embedding AS vector)
     LIMIT :limit

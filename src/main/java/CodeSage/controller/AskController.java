@@ -6,6 +6,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.Serializable;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -25,42 +27,66 @@ public class AskController {
     }
 
     @PostMapping
-    public Map<String, String> ask(@RequestBody Map<String, String> req) {
+    public Map<String, Serializable> ask(@RequestBody Map<String, String> req) {
         String question = req.get("question");
         log.info("Ask request received with question: {}", question);
 
         try {
             // Search for relevant code chunks
             log.debug("Searching for relevant code chunks...");
-            var results = vectorStoreService.searchDb(question, 10);
+            var results = vectorStoreService.searchSmart(question, 20);
+
+            results.forEach(r -> System.out.println("DEBUG PATH: " + r.get("path")));
+
+            List<String> files = results.stream()
+                    .map(r -> (String) r.get("path"))
+                    .distinct()
+                    .toList();
+
             log.info("Found {} relevant chunks", results.size());
 
             String context = results.stream()
-                    .map(r -> r.get("content"))
+                    .map(r -> "FILE: " + r.get("path") + "\nCODE:\n" + r.get("content"))
                     .collect(Collectors.joining("\n\n"));
+
+            context = vectorStoreService.rerankContext(question, context);
+
             log.debug("Context prepared with {} characters", context.length());
 
             String prompt = """
-                You are analyzing a Java Spring Boot project.
+You are analyzing backend code.
 
-                Answer based only on the following code context.
+STRICT RULES:
+- Answer ONLY using the provided code
+- DO NOT assume anything
+- MUST include file path from context
+- Keep answer concise and structured
 
-                Focus on:
-                - controllers
-                - request mappings
-                - APIs
+Context:
+%s
 
-                Context:
-                %s
-
-                Question: %s
-                """.formatted(context, question);
+Question:
+%s
+""".formatted(context, question);
 
             log.debug("Generating answer for question: {}", question);
             String answer = aiService.generate(prompt);
 
             log.info("Answer generated successfully for question: {}", question);
-            return Map.of("answer", answer);
+            int limit = 500;
+
+            boolean truncated = context.length() > limit;
+
+            String preview = truncated
+                    ? context.substring(0, limit) + "..."
+                    : context;
+
+            return Map.of(
+                    "answer", answer,
+                    "context", preview,
+                    "files", (Serializable) files,
+                    "truncated", truncated
+            );
         } catch (Exception e) {
             log.error("Error processing ask request for question: {}", question, e);
             throw e;

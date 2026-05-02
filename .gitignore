@@ -37,3 +37,4 @@ out/
 .vscode/
 keys.txt
 keys.txt
+.env
