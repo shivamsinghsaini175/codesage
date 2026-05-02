@@ -1,0 +1,29 @@
+spring:
+
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      base-url: https://api.deepseek.com
+      chat:
+        options:
+          model: deepseek-chat
+    ollama:
+      base-url: http://localhost:11434
+      embedding:
+        options:
+          model: nomic-embed-text
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/codesage
+    username: shivamsinghsaini
+    password: ""   # keep empty if no password
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+logging:
+  level:
+    CodeSage: DEBUG
+    org.springframework.ai: DEBUG
+    root: INFO
